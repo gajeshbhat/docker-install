@@ -85,6 +85,13 @@ set -e
 #   $ sudo sh install-docker.sh --start-daemon
 #
 # Note: This option requires appropriate privileges to manage system services.
+# --setup-repo
+#
+# Use the --setup-repo option to configure Docker's package repositories without
+# installing Docker packages. This is useful when you want to add the repository
+# but install packages separately:
+#
+#   $ sudo sh install-docker.sh --setup-repo
 #
 # ==============================================================================
 
@@ -122,6 +129,7 @@ fi
 mirror=''
 DRY_RUN=${DRY_RUN:-}
 START_DAEMON=${START_DAEMON:-}
+REPO_ONLY=${REPO_ONLY:-0}
 while [ $# -gt 0 ]; do
 	case "$1" in
 		--channel)
@@ -140,6 +148,10 @@ while [ $# -gt 0 ]; do
 			;;
 		--version)
 			VERSION="${2#v}"
+			shift
+			;;
+		--setup-repo)
+			REPO_ONLY=1
 			shift
 			;;
 		--*)
@@ -565,7 +577,7 @@ do_install() {
 		ubuntu.focal|ubuntu.bionic|ubuntu.xenial|ubuntu.trusty)
 			deprecation_notice "$lsb_dist" "$dist_version"
 			;;
-		ubuntu.mantic|ubuntu.lunar|ubuntu.kinetic|ubuntu.impish|ubuntu.hirsute|ubuntu.groovy|ubuntu.eoan|ubuntu.disco|ubuntu.cosmic)
+		ubuntu.oracular|ubuntu.mantic|ubuntu.lunar|ubuntu.kinetic|ubuntu.impish|ubuntu.hirsute|ubuntu.groovy|ubuntu.eoan|ubuntu.disco|ubuntu.cosmic)
 			deprecation_notice "$lsb_dist" "$dist_version"
 			;;
 		fedora.*)
@@ -592,6 +604,11 @@ do_install() {
 				$sh_c "echo \"$apt_repo\" > /etc/apt/sources.list.d/docker.list"
 				$sh_c 'apt-get -qq update >/dev/null'
 			)
+
+			if [ "$REPO_ONLY" = "1" ]; then
+				exit 0
+			fi
+
 			pkg_version=""
 			if [ -n "$VERSION" ]; then
 				if is_dry_run; then
@@ -684,6 +701,11 @@ do_install() {
 					$sh_c "yum makecache"
 				fi
 			)
+
+			if [ "$REPO_ONLY" = "1" ]; then
+				exit 0
+			fi
+
 			pkg_version=""
 			if command_exists dnf; then
 				pkg_manager="dnf"
