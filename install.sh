@@ -86,7 +86,7 @@ set -e
 # --autostart
 #
 # Use the --autostart option to automatically start and enable the Docker
-# daemon service after installation. This option will attempt to start the
+# daemon service after the installation is complete. This option will attempt to start the
 # Docker service using the appropriate service management system (systemd,
 # etc.) for your distribution:
 #
