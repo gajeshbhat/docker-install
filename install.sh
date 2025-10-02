@@ -83,6 +83,17 @@ set -e
 #
 #   $ sudo sh install-docker.sh --setup-repo
 #
+# --autostart
+#
+# Use the --autostart option to automatically start and enable the Docker
+# daemon service after installation. This option will attempt to start the
+# Docker service using the appropriate service management system (systemd,
+# etc.) for your distribution:
+#
+#   $ sudo sh install-docker.sh --autostart
+#
+# Note: This option requires appropriate privileges to manage system services.
+#
 # ==============================================================================
 
 
@@ -119,6 +130,7 @@ fi
 mirror=''
 DRY_RUN=${DRY_RUN:-}
 REPO_ONLY=${REPO_ONLY:-0}
+AUTOSTART=${AUTOSTART:-}
 while [ $# -gt 0 ]; do
 	case "$1" in
 		--channel)
@@ -139,6 +151,9 @@ while [ $# -gt 0 ]; do
 		--setup-repo)
 			REPO_ONLY=1
 			shift
+			;;
+		--autostart)
+			AUTOSTART=1
 			;;
 		--*)
 			echo "Illegal option $1"
@@ -278,6 +293,62 @@ get_distribution() {
 	# Returning an empty string here should be alright since the
 	# case statements don't act unless you provide an actual value
 	echo "$lsb_dist"
+}
+
+# Check if systemd is available and running
+has_systemd() {
+	command_exists systemctl && systemctl --version >/dev/null 2>&1
+}
+
+# Start and enable Docker daemon service
+start_docker_daemon() {
+	echo
+	echo "Starting and enabling Docker daemon service..."
+
+	if has_systemd; then
+		# Use systemd for modern distributions
+		if ! is_dry_run; then
+			echo "Using systemd to manage Docker service"
+		fi
+		(
+			set -x
+			$sh_c 'systemctl start docker'
+			$sh_c 'systemctl enable docker'
+		)
+		if ! is_dry_run; then
+			echo "Docker daemon started and enabled successfully"
+		fi
+	else
+		# Fallback for older systems without systemd
+		if ! is_dry_run; then
+			echo "Using traditional service management"
+		fi
+		(
+			set -x
+			$sh_c 'service docker start'
+		)
+		# Try to enable service on boot (distribution-specific)
+		if command_exists chkconfig; then
+			(
+				set -x
+				$sh_c 'chkconfig docker on'
+			)
+		elif command_exists update-rc.d; then
+			(
+				set -x
+				$sh_c 'update-rc.d docker defaults'
+			)
+		else
+			if ! is_dry_run; then
+				echo "Warning: Could not enable Docker service to start on boot"
+				echo "Please manually configure Docker to start on boot for your system"
+			fi
+		fi
+		if ! is_dry_run; then
+			echo "Docker daemon started successfully"
+		fi
+	fi
+	echo
 }
 
 echo_docker_as_nonroot() {
@@ -582,6 +653,9 @@ do_install() {
 				fi
 				$sh_c "DEBIAN_FRONTEND=noninteractive apt-get -y -qq install $pkgs >/dev/null"
 			)
+			if [ -n "$AUTOSTART" ]; then
+				start_docker_daemon
+			fi
 			echo_docker_as_nonroot
 			exit 0
 			;;
@@ -689,6 +763,9 @@ do_install() {
 				fi
 				$sh_c "$pkg_manager $pkg_manager_flags install $pkgs"
 			)
+			if [ -n "$AUTOSTART" ]; then
+				start_docker_daemon
+			fi
 			echo_docker_as_nonroot
 			exit 0
 			;;
