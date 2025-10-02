@@ -75,16 +75,6 @@ set -e
 #
 #   $ sudo sh install-docker.sh --mirror AzureChinaCloud
 #
-# --start-daemon
-#
-# Use the --start-daemon option to automatically start and enable the Docker
-# daemon service after installation. This option will attempt to start the
-# Docker service using the appropriate service management system (systemd,
-# etc.) for your distribution:
-#
-#   $ sudo sh install-docker.sh --start-daemon
-#
-# Note: This option requires appropriate privileges to manage system services.
 # --setup-repo
 #
 # Use the --setup-repo option to configure Docker's package repositories without
@@ -92,6 +82,17 @@ set -e
 # but install packages separately:
 #
 #   $ sudo sh install-docker.sh --setup-repo
+#
+# --autostart
+#
+# Use the --autostart option to automatically start and enable the Docker
+# daemon service after installation. This option will attempt to start the
+# Docker service using the appropriate service management system (systemd,
+# etc.) for your distribution:
+#
+#   $ sudo sh install-docker.sh --autostart
+#
+# Note: This option requires appropriate privileges to manage system services.
 #
 # ==============================================================================
 
@@ -128,8 +129,8 @@ fi
 
 mirror=''
 DRY_RUN=${DRY_RUN:-}
-START_DAEMON=${START_DAEMON:-}
 REPO_ONLY=${REPO_ONLY:-0}
+AUTOSTART=${AUTOSTART:-}
 while [ $# -gt 0 ]; do
 	case "$1" in
 		--channel)
@@ -143,9 +144,6 @@ while [ $# -gt 0 ]; do
 			mirror="$2"
 			shift
 			;;
-		--start-daemon)
-			START_DAEMON=1
-			;;
 		--version)
 			VERSION="${2#v}"
 			shift
@@ -153,6 +151,9 @@ while [ $# -gt 0 ]; do
 		--setup-repo)
 			REPO_ONLY=1
 			shift
+			;;
+		--autostart)
+			AUTOSTART=1
 			;;
 		--*)
 			echo "Illegal option $1"
@@ -301,33 +302,27 @@ has_systemd() {
 
 # Start and enable Docker daemon service
 start_docker_daemon() {
-	if is_dry_run; then
-		echo "# DRY RUN: Would start and enable Docker daemon service"
-		if has_systemd; then
-			echo "# DRY RUN: systemctl start docker"
-			echo "# DRY RUN: systemctl enable docker"
-		else
-			echo "# DRY RUN: service docker start"
-			echo "# DRY RUN: chkconfig docker on (or equivalent)"
-		fi
-		return
-	fi
-
 	echo
 	echo "Starting and enabling Docker daemon service..."
 
 	if has_systemd; then
 		# Use systemd for modern distributions
-		echo "Using systemd to manage Docker service"
+		if ! is_dry_run; then
+			echo "Using systemd to manage Docker service"
+		fi
 		(
 			set -x
 			$sh_c 'systemctl start docker'
 			$sh_c 'systemctl enable docker'
 		)
-		echo "Docker daemon started and enabled successfully"
+		if ! is_dry_run; then
+			echo "Docker daemon started and enabled successfully"
+		fi
 	else
 		# Fallback for older systems without systemd
-		echo "Using traditional service management"
+		if ! is_dry_run; then
+			echo "Using traditional service management"
+		fi
 		(
 			set -x
 			$sh_c 'service docker start'
@@ -344,10 +339,14 @@ start_docker_daemon() {
 				$sh_c 'update-rc.d docker defaults'
 			)
 		else
-			echo "Warning: Could not enable Docker service to start on boot"
-			echo "Please manually configure Docker to start on boot for your system"
+			if ! is_dry_run; then
+				echo "Warning: Could not enable Docker service to start on boot"
+				echo "Please manually configure Docker to start on boot for your system"
+			fi
 		fi
-		echo "Docker daemon started successfully"
+		if ! is_dry_run; then
+			echo "Docker daemon started successfully"
+		fi
 	fi
 	echo
 }
@@ -654,7 +653,7 @@ do_install() {
 				fi
 				$sh_c "DEBIAN_FRONTEND=noninteractive apt-get -y -qq install $pkgs >/dev/null"
 			)
-			if [ -n "$START_DAEMON" ]; then
+			if [ -n "$AUTOSTART" ]; then
 				start_docker_daemon
 			fi
 			echo_docker_as_nonroot
@@ -764,7 +763,7 @@ do_install() {
 				fi
 				$sh_c "$pkg_manager $pkg_manager_flags install $pkgs"
 			)
-			if [ -n "$START_DAEMON" ]; then
+			if [ -n "$AUTOSTART" ]; then
 				start_docker_daemon
 			fi
 			echo_docker_as_nonroot
