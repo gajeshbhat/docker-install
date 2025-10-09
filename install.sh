@@ -320,13 +320,13 @@ has_systemd() {
 # The function respects the dry-run mode and will only print commands without
 # executing them when $sh_c is set to 'echo' (dry-run mode).
 start_docker_daemon() {
-	echo
-	echo "Starting and enabling Docker daemon service..."
+	>&2 echo
+	>&2 echo "Starting and enabling Docker daemon service..."
 
 	if has_systemd; then
 		# Use systemd for modern distributions (most current Linux distributions)
 		if ! is_dry_run; then
-			echo "Using systemd to manage Docker service"
+			>&2 echo "Using systemd to manage Docker service"
 		fi
 		(
 			set -x
@@ -334,12 +334,12 @@ start_docker_daemon() {
 			$sh_c 'systemctl enable docker'
 		)
 		if ! is_dry_run; then
-			echo "Docker daemon started and enabled successfully"
+			>&2 echo "Docker daemon started and enabled successfully"
 		fi
 	else
 		# Fallback for older systems without systemd (legacy init systems)
 		if ! is_dry_run; then
-			echo "Using traditional service management"
+			>&2 echo "Using traditional service management"
 		fi
 		(
 			set -x
@@ -361,15 +361,15 @@ start_docker_daemon() {
 		else
 			# Unknown init system - warn the user
 			if ! is_dry_run; then
-				echo "Warning: Could not enable Docker service to start on boot"
-				echo "Please manually configure Docker to start on boot for your system"
+				>&2 echo "Warning: Could not enable Docker service to start on boot"
+				>&2 echo "Please manually configure Docker to start on boot for your system"
 			fi
 		fi
 		if ! is_dry_run; then
-			echo "Docker daemon started successfully"
+			>&2 echo "Docker daemon started successfully"
 		fi
 	fi
-	echo
+	>&2 echo
 }
 
 echo_docker_as_nonroot() {
