@@ -33,7 +33,7 @@ shellcheck: $(FILES)
 .PHONY: test
 test: $(foreach channel,$(CHANNELS),build/$(channel)/install.sh)
 	for file in $^; do \
-		(set -x; docker run --rm -it \
+		(set -eux; docker run --rm -i \
 			$(VOLUME_MOUNTS) \
 			--privileged \
 			-e HOME=/tmp \
@@ -42,7 +42,7 @@ test: $(foreach channel,$(CHANNELS),build/$(channel)/install.sh)
 			-e VERSION \
 			-e CHANNEL \
 			$(TEST_IMAGE) \
-			sh $$file) | tail -n 30; \
+			sh $$file) || exit $$?; \
 	done
 
 AWS?=docker run \
