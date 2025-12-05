@@ -310,25 +310,30 @@ start_docker_daemon() {
 	>&2 echo
 	>&2 echo "Starting and enabling Docker daemon service..."
 
-	# On modern RHEL/CentOS/Fedora systems, only systemctl exists (no 'service' command).
-	# In containers, 'systemctl start' fails but 'systemctl enable' succeeds, creating
-	# symlinks so Docker starts on boot when the system runs normally (outside container).
+	# Use systemctl if available (for systemd-based systems)
 	if command_exists systemctl; then
 		if ! is_dry_run; then
 			if has_systemd; then
 				>&2 echo "Using systemd to manage Docker service"
 			else
-				>&2 echo "Attempting to use systemctl (systemd not running as init)"
+				>&2 echo "Configuring Docker service for systemd (not running as init)"
 			fi
 		fi
 		(
 			set -x
-			# In containers, these commands may fail but we try anyway
-			$sh_c 'systemctl start docker' || true
-			$sh_c 'systemctl enable docker' || true
+			# Only start if systemd is running as init
+			if has_systemd; then
+				$sh_c 'systemctl start docker'
+			fi
+			# Always enable to configure service for boot (supports image portability)
+			$sh_c 'systemctl enable docker'
 		)
 		if ! is_dry_run; then
-			>&2 echo "Docker service configuration attempted"
+			if has_systemd; then
+				>&2 echo "Docker daemon started and enabled"
+			else
+				>&2 echo "Docker service configured (will start on boot when systemd runs)"
+			fi
 		fi
 	elif command_exists service; then
 		# Fallback for older systems without systemd
