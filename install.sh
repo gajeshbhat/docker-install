@@ -85,7 +85,7 @@ set -e
 #
 # Automatic Service Start
 #
-# By default, this script will automatically start and enable the Docker daemon
+# By default, this script automatically starts the Docker daemon and enables the docker
 # service after installation using the appropriate service management system
 # (systemd, etc.) for your distribution.
 #
@@ -321,12 +321,14 @@ start_docker_daemon() {
 		fi
 		(
 			set -x
-			# Only start if systemd is running as init
+			# Use --now to start and enable simultaneously when systemd is running
 			if has_systemd; then
-				$sh_c 'systemctl start docker'
+				$sh_c 'systemctl enable --now docker'
+			else
+				# Only enable for boot when systemd is not running (e.g., containers)
+				# This supports image portability - service will start when booted with systemd
+				$sh_c 'systemctl enable docker'
 			fi
-			# Always enable to configure service for boot (supports image portability)
-			$sh_c 'systemctl enable docker'
 		)
 		if ! is_dry_run; then
 			if has_systemd; then
