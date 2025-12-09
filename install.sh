@@ -86,8 +86,7 @@ set -e
 # Automatic Service Start
 #
 # By default, this script automatically starts the Docker daemon and enables the docker
-# service after installation using the appropriate service management system
-# (systemd, etc.) for your distribution.
+# service after installation if systemd is used as init.
 #
 # If you prefer to start the service manually, use the --no-autostart option:
 #
@@ -131,7 +130,7 @@ fi
 mirror=''
 DRY_RUN=${DRY_RUN:-}
 REPO_ONLY=${REPO_ONLY:-0}
-AUTOSTART=${AUTOSTART:-1}
+NO_AUTOSTART=${NO_AUTOSTART:-0}
 while [ $# -gt 0 ]; do
 	case "$1" in
 		--channel)
@@ -154,7 +153,7 @@ while [ $# -gt 0 ]; do
 			shift
 			;;
 		--no-autostart)
-			AUTOSTART=0
+			NO_AUTOSTART=1
 			;;
 		--*)
 			echo "Illegal option $1"
@@ -296,72 +295,18 @@ get_distribution() {
 	echo "$lsb_dist"
 }
 
-# Check if systemd is available and running
-# Returns 0 if systemd is available, 1 otherwise
-has_systemd() {
-	if [ -d /run/systemd/system ]; then
-		return 0
-	else
-		return 1
-	fi
-}
-
 start_docker_daemon() {
-	>&2 echo
-	>&2 echo "Starting and enabling Docker daemon service..."
-
 	# Use systemctl if available (for systemd-based systems)
 	if command_exists systemctl; then
-		if ! is_dry_run; then
-			if has_systemd; then
-				>&2 echo "Using systemd to manage Docker service"
-			else
-				>&2 echo "Configuring Docker service for systemd (not running as init)"
-			fi
-		fi
-		(
-			set -x
-			# Use --now to start and enable simultaneously when systemd is running
-			if has_systemd; then
-				$sh_c 'systemctl enable --now docker'
-			else
-				# Only enable for boot when systemd is not running (e.g., containers)
-				# This supports image portability - service will start when booted with systemd
-				$sh_c 'systemctl enable docker'
-			fi
-		)
-		if ! is_dry_run; then
-			if has_systemd; then
-				>&2 echo "Docker daemon started and enabled"
-			else
-				>&2 echo "Docker service configured (will start on boot when systemd runs)"
-			fi
-		fi
-	elif command_exists service; then
-		# Fallback for older systems without systemd
-		if ! is_dry_run; then
-			>&2 echo "Using traditional service management"
-		fi
-		(
-			set -x
-			$sh_c 'service docker start'
-		)
-		# Try to enable service on boot (distribution-specific commands)
-		if command_exists chkconfig; then
-			# RHEL/CentOS/Fedora legacy systems
-			(
-				set -x
-				$sh_c 'chkconfig docker on'
-			)
-		elif command_exists update-rc.d; then
-			# Debian/Ubuntu legacy systems
-			(
-				set -x
-				$sh_c 'update-rc.d docker defaults'
-			)
-		fi
-		if ! is_dry_run; then
-			>&2 echo "Docker daemon started successfully"
+		is_dry_run || >&2 echo "Using systemd to manage Docker service"
+		# Use --now to start and enable simultaneously when systemd is running
+		if (
+			is_dry_run || set -x
+			$sh_c systemctl enable --now docker.service 2>/dev/null
+		); then
+			is_dry_run || echo "INFO: Docker daemon enabled and started" >&2
+		else
+			is_dry_run || echo "WARNING: unable to enable the docker service" >&2
 		fi
 	else
 		# No service management available (container environment)
@@ -676,7 +621,7 @@ do_install() {
 				fi
 				$sh_c "DEBIAN_FRONTEND=noninteractive apt-get -y -qq install $pkgs >/dev/null"
 			)
-			if [ "$AUTOSTART" = "1" ]; then
+			if [ "$NO_AUTOSTART" != "1" ]; then
 				start_docker_daemon
 			fi
 			echo_docker_as_nonroot
